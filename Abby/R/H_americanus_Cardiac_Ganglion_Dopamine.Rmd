@@ -1,0 +1,74 @@
+---
+title: "H_americanus_Cardiac_Ganglion_Dopamine"
+author: "Daniel R. Kick"
+date: "October 17, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(cowplot)
+library(lemon)
+
+
+```
+
+```{r}
+M <- read.csv("C:/Users/drk8b9/Documents/GitHubRepos/mentoring_data_analysis/Abby/Data/Test.corr.csv")
+
+
+
+
+get_cor_over_time <- function(input.df = M[1:100, ],
+                              col.x = "IN4",
+                              col.y = "IN6",
+                              nbins = 3,
+                              keep.every = 1,
+                              method = "pearson") {
+  out.vector <- matrix(nrow = nrow(input.df), ncol = 1)
+
+  bin.size <- floor(nrow(input.df) / nbins)
+  bin.start <- 0
+
+  for (i in 1:nbins) {
+    if (i != nbins) {
+      bin.end <- bin.start + bin.size
+    } else {
+      # For the last itteration, lump all the remaining observations into the last bin. This of course can result in the final bin being (2x-1) instead of x.
+      bin.end <- nrow(input.df)
+    }
+
+    bin.cor <- cor(input.df[seq(from = bin.start, to = bin.end, by = keep.every), col.x],
+      input.df[seq(from = bin.start, to = bin.end, by = keep.every), col.y],
+      method = method
+    )
+    out.vector[seq(from = bin.start, to = bin.end, by = 1)] <- bin.cor
+    bin.start <- bin.end
+  }
+  return(out.vector)
+}
+
+M$cor3 <- get_cor_over_time(input.df = M,
+                              col.x = "IN4",
+                              col.y = "IN6",
+                              nbins = 3,
+                              keep.every = 100,
+                              method = "pearson")
+
+M$cor30 <- get_cor_over_time(input.df = M,
+                              col.x = "IN4",
+                              col.y = "IN6",
+                              nbins = 30,
+                              keep.every = 100,
+                              method = "pearson")
+```
+
+```{r}
+N <- gather(M, cors, bins, 4:5)
+
+library(esquisse)
+
+esquisse::esquisser(data = N[seq(from  = 0, to = nrow(N), by = 100),])
+```
+
