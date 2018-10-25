@@ -7,29 +7,88 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library(tidyverse)
-library(cowplot)
-library(lemon)
+library(esquisse) # GUI interface for ggplot2
+library(readxl) # Importing xlsx
+library(janitor) # renaming df names
+library(tidyverse) # Plotting, Data wrangling
+library(cowplot) # plot grid
 
 
+use.cor.bins <- 1000
 ```
 
+## Custom functions:
 ```{r}
-M <- read.csv("C:/Users/drk8b9/Documents/GitHubRepos/mentoring_data_analysis/Abby/Data/Test.corr.csv")
+make_list_from_excels <- function(target.dir = "C:/Users/drk8b9/Documents/GitHubRepos/mentoring_data_analysis/Abby/Data/data_dirs/",
+                                  reduce.by = 1000) {
+  tic <- Sys.time()
+  sub.dirs <- list.files(target.dir)
+  output.list <- list()
+
+  for (i in seq_along(sub.dirs)) {
+    target.files <- list.files(paste0(target.dir, sub.dirs[i], "/"))
+    temp.list <- list()
+    for (j in seq_along(target.files)) {
+      temp <- readxl::read_xlsx(paste0(target.dir, sub.dirs[i], "/", target.files[j]))
+      temp <- janitor::clean_names(temp)
+
+      # Reduce data by user specified amount
+      temp <- temp[seq(from = 1, to = nrow(temp), by = reduce.by), ]
+
+      #  duplicate the first row of $Condition and $`File Number` for all rows
+      temp[seq(1, nrow(temp)), "condition"] <- temp[1, "condition"]
+      temp[seq(1, nrow(temp)), "file_number"] <- temp[1, "file_number"]
+
+      # Add a column to help correct time col later
+      temp$recording <- target.files[j]
+      temp.list[[(length(temp.list) + 1)]] <- temp
+    }
+  output.list[[(length(output.list) + 1)]] <- temp.list
+  }
+  toc <- Sys.time()
+  print(toc - tic)
+  return(output.list)
+}
+
+make_ldf_from_lol <- function(input.list = output.list) {
+  # Convert list of lists (of dfs) into list of dfs
+
+  output.list <- list()
+  for (i in seq_along(input.list)) {
+    temp.list <- input.list[[i]]
+    temp.df <- data.frame()
+    # Consolidate everything from one exp
+    for (j in seq_along(temp.list)) {
+      temp.df <- rbind(temp.df, temp.list[[j]])
+    }
+    output.list[[(length(output.list) + 1)]] <- temp.df
+  }
+  return(output.list)
+}
+
+make_df_from_ldf <- function(
+                             input.list = output.list) {
+  # Convert a list of dfs into one df
 
 
+  output.df <- data.frame()
+  for (i in seq_along(input.list)) {
+    output.df <- rbind(output.df, input.list[[i]])
+  }
+  return(output.df)
+}
 
 
 get_cor_over_time <- function(input.df = M[1:100, ],
-                              col.x = "IN4",
-                              col.y = "IN6",
+                              col.x = "in4",
+                              col.y = "in6",
                               nbins = 3,
                               keep.every = 1,
                               method = "pearson") {
   out.vector <- matrix(nrow = nrow(input.df), ncol = 1)
 
   bin.size <- floor(nrow(input.df) / nbins)
-  bin.start <- 0
+  bin.start <- 1
 
   for (i in 1:nbins) {
     if (i != nbins) {
@@ -44,10 +103,172 @@ get_cor_over_time <- function(input.df = M[1:100, ],
       method = method
     )
     out.vector[seq(from = bin.start, to = bin.end, by = 1)] <- bin.cor
-    bin.start <- bin.end
+    bin.start <- bin.end+1
   }
   return(out.vector)
 }
+```
+
+## Data Preparation
+```{r read in and condense data}
+list.files("S:/Data_Undergraduate/Data_Abby/Fall2018/data/")
+#### Outline ####
+# For each dir in Abby/Data/data_dirs/
+  # For each excel file
+    # reduce data by a set factor
+  # return list (of files in exp)
+# return list of lists (of returned lists)
+
+output.list0 <- make_list_from_excels(target.dir = "S:/Data_Undergraduate/Data_Abby/Fall2018/data/",
+                                  reduce.by = 500)
+
+#output.list0 <- make_list_from_excels(target.dir = "C:/Users/drk8b9/Documents/GitHubRepos/mentoring_data_analysis/Abby/Data/data_dirs/",
+#                                  reduce.by = 500)
+output.list1 <- make_ldf_from_lol(input.list = output.list0)
+output.list2 <- make_df_from_ldf(input.list = output.list1)
+M <- output.list2
+```
+
+
+```{r correct time}
+M$exp <- rep(NA, times = nrow(M))
+M$rec <- rep(NA, times = nrow(M))
+
+# correct times for each df
+recs <- unique(M$recording)
+for (i in seq_along(recs)){
+  M[M$recording == recs[i], c("exp")] <- stringr::str_split(recs[i], pattern = "_", n = 2)[[1]][1]
+  M[M$recording == recs[i], c("rec")] <- stringr::str_split(recs[i], pattern = "_", n = 2)[[1]][2]
+}
+
+# update times using unique() within each experiment. Add previous largest time, use a placeholder variable.
+exps <- unique(M$exp)
+for (i in seq_along(exps)){
+  recs <- M[M$exp == exps[i], "rec"]$rec %>% unique()
+  offset <- 0
+  for (j in seq_along(recs)){
+    print(j) 
+    if (j == 1){
+      offset <- M[M$exp == exps[i] & M$rec == recs[j] , "time_ms"] %>% max()
+    } else {
+      M[M$exp == exps[i] & M$rec == recs[j] , "time_ms"] <- M[M$exp == exps[i] & M$rec == recs[j] , "time_ms"] + offset
+      
+      offset <- M[M$exp == exps[i] & M$rec == recs[j] , "time_ms"] %>% max()
+    }
+  }
+}
+```
+
+
+```{r}
+M$cor <- NA
+exps <- unique(M$exp)
+for (i in seq_along(exps)){
+  temp <- M[M$exp == exps[i], ]
+
+  out <- get_cor_over_time(input.df = temp,
+                    col.x = "in4",
+                    col.y = "in6",
+                    nbins = use.cor.bins,
+                    keep.every = 1,
+                    method = "pearson")
+  
+  M[M$exp == exps[i], "cor"] <- out
+}
+```
+
+
+
+
+
+
+
+```{r}
+p1 <- ggplot(M)+
+  geom_point(aes(x = time_ms, y = in4, color = condition))+
+  geom_point(aes(x = time_ms, y = in6, color = condition))+
+  facet_grid(~exp)
+
+p2 <- ggplot(M, aes(x = time_ms, y = cor, color = condition, group = exp))+
+  geom_point()+
+  geom_line()+
+  facet_grid(~exp)
+  
+cowplot::plot_grid(plotlist = list(p1, p2), nrow = 2, ncol =1)
+
+ggplot(M)+
+  geom_point(aes(x = time_ms, y = in4, color = condition))+
+  geom_point(aes(x = time_ms, y = in6, color = condition))+
+  geom_smooth(aes(x = time_ms, y = in4), color = "black")+
+  geom_smooth(aes(x = time_ms, y = in6), color = "black")+
+  facet_grid(~exp)
+
+b <- mgcv::gam(in4 ~ s(time_ms, bs = "cs"), data = M[M$exp == "AB092618", ])
+b %>% plot()
+print(b)
+
+
+in4_test <- M[M$exp == "AB092618", "in4"]
+time_test <- M[M$exp == "AB092618", "time_ms"]
+
+time_test$predicts <- NA
+time_test$predicts <- predict(b, time_test)
+
+ggplot(time_test, aes(x = time_ms, y = predicts))+
+  geom_line()
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Read and reduce data
+```{r}
+#M <- read.csv("C:/Users/drk8b9/Documents/GitHubRepos/mentoring_data_analysis/Abby/Data/Test.corr.csv")
+M <- read.csv("C:/Users/drk8b9/Documents/GitHubRepos/mentoring_data_analysis/Abby/Data/Abby_data_reshape.csv", stringsAsFactors = T)
+
+M <- M[seq(from = 1, to = nrow(M), by = 10), -1]
+names(M) <- c("Condition", "Trace", "Time", "IN4", "IN6")
+```
+
+
+
+```{r}
+
 
 M$cor3 <- get_cor_over_time(input.df = M,
                               col.x = "IN4",
@@ -67,7 +288,7 @@ M$cor30 <- get_cor_over_time(input.df = M,
 ```{r}
 N <- gather(M, cors, bins, 4:5)
 
-library(esquisse)
+
 
 esquisse::esquisser(data = N[seq(from  = 0, to = nrow(N), by = 100),])
 ```
