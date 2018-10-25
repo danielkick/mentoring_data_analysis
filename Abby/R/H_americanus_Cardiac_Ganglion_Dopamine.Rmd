@@ -7,18 +7,21 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(readr) # write_rds, read_rds
 library(esquisse) # GUI interface for ggplot2
 library(readxl) # Importing xlsx
+library(mgcv) # Used to drop low signal/noise data with GAM
 library(janitor) # renaming df names
 library(tidyverse) # Plotting, Data wrangling
 library(cowplot) # plot grid
 
-
+update.data.frame <- FALSE
 use.cor.bins <- 1000
+drop.low.signal.noise <- TRUE
 ```
 
 ## Custom functions:
-```{r}
+```{r custom funcitons}
 make_list_from_excels <- function(target.dir = "C:/Users/drk8b9/Documents/GitHubRepos/mentoring_data_analysis/Abby/Data/data_dirs/",
                                   reduce.by = 1000) {
   tic <- Sys.time()
@@ -103,7 +106,7 @@ get_cor_over_time <- function(input.df = M[1:100, ],
       method = method
     )
     out.vector[seq(from = bin.start, to = bin.end, by = 1)] <- bin.cor
-    bin.start <- bin.end+1
+    bin.start <- bin.end
   }
   return(out.vector)
 }
@@ -111,24 +114,29 @@ get_cor_over_time <- function(input.df = M[1:100, ],
 
 ## Data Preparation
 ```{r read in and condense data}
-list.files("S:/Data_Undergraduate/Data_Abby/Fall2018/data/")
-#### Outline ####
-# For each dir in Abby/Data/data_dirs/
-  # For each excel file
-    # reduce data by a set factor
-  # return list (of files in exp)
-# return list of lists (of returned lists)
-
-output.list0 <- make_list_from_excels(target.dir = "S:/Data_Undergraduate/Data_Abby/Fall2018/data/",
-                                  reduce.by = 500)
-
-#output.list0 <- make_list_from_excels(target.dir = "C:/Users/drk8b9/Documents/GitHubRepos/mentoring_data_analysis/Abby/Data/data_dirs/",
-#                                  reduce.by = 500)
-output.list1 <- make_ldf_from_lol(input.list = output.list0)
-output.list2 <- make_df_from_ldf(input.list = output.list1)
-M <- output.list2
+if (update.data.frame == TRUE){
+  #### Outline ####
+  # For each dir in Abby/Data/data_dirs/
+    # For each excel file
+      # reduce data by a set factor
+    # return list (of files in exp)
+  # return list of lists (of returned lists)
+  
+  output.list0 <- make_list_from_excels(target.dir = "S:/Data_Undergraduate/Data_Abby/Fall2018/data/",
+                                    reduce.by = 500)
+  
+  #output.list0 <- make_list_from_excels(target.dir = "C:/Users/drk8b9/Documents/GitHubRepos/mentoring_data_analysis/Abby/Data/data_dirs/",
+  #                                  reduce.by = 500)
+  output.list1 <- make_ldf_from_lol(input.list = output.list0)
+  output.list2 <- make_df_from_ldf(input.list = output.list1)
+  M <- output.list2
+  
+  write_rds(M, "../data/combined_data.rds")
+  write.csv(M, "../data/combined_data.csv")
+} else {
+  M <- read_rds("../data/combined_data.rds") 
+}
 ```
-
 
 ```{r correct time}
 M$exp <- rep(NA, times = nrow(M))
@@ -147,7 +155,6 @@ for (i in seq_along(exps)){
   recs <- M[M$exp == exps[i], "rec"]$rec %>% unique()
   offset <- 0
   for (j in seq_along(recs)){
-    print(j) 
     if (j == 1){
       offset <- M[M$exp == exps[i] & M$rec == recs[j] , "time_ms"] %>% max()
     } else {
@@ -159,8 +166,35 @@ for (i in seq_along(exps)){
 }
 ```
 
+```{r drop near baseline mv data}
+if (drop.low.signal.noise == TRUE){
+  M$in4_threshold <- NA
+  M$in6_threshold <- NA
+  
+  exps <- unique(M$exp)
+  for (i in seq_along(exps)){
+    exp.time <- M[M$exp == exps[i], "time_ms"]
+  
+    fm.1 <- mgcv::gam(in4 ~ s(time_ms, bs = "cs"), 
+                      data = M[M$exp == exps[i],])
+    fm.2 <- mgcv::gam(in6 ~ s(time_ms, bs = "cs"), 
+                      data = M[M$exp == exps[i],])
+    
+    M[M$exp == exps[i], "in4_threshold"] <- predict(fm.1, exp.time)
+    M[M$exp == exps[i], "in6_threshold"] <- predict(fm.2, exp.time)
+  }
+  
+  M[(M$in4 =< M$in4_threshold) | (M$in6 =< M$in6_threshold), c("in4", "in6")] <- NA
+  
+  M <- M[, !(names(M) %in% c("in4_threshold", "in6_threshold"))]
+  M <- M[!(is.na(M$in4)),]
+  
+}
+```
 
-```{r}
+
+
+```{r produce correlation coefficients}
 M$cor <- NA
 exps <- unique(M$exp)
 for (i in seq_along(exps)){
@@ -178,12 +212,7 @@ for (i in seq_along(exps)){
 ```
 
 
-
-
-
-
-
-```{r}
+```{r preliminary plots}
 p1 <- ggplot(M)+
   geom_point(aes(x = time_ms, y = in4, color = condition))+
   geom_point(aes(x = time_ms, y = in6, color = condition))+
@@ -202,94 +231,11 @@ ggplot(M)+
   geom_smooth(aes(x = time_ms, y = in4), color = "black")+
   geom_smooth(aes(x = time_ms, y = in6), color = "black")+
   facet_grid(~exp)
-
-b <- mgcv::gam(in4 ~ s(time_ms, bs = "cs"), data = M[M$exp == "AB092618", ])
-b %>% plot()
-print(b)
-
-
-in4_test <- M[M$exp == "AB092618", "in4"]
-time_test <- M[M$exp == "AB092618", "time_ms"]
-
-time_test$predicts <- NA
-time_test$predicts <- predict(b, time_test)
-
-ggplot(time_test, aes(x = time_ms, y = predicts))+
-  geom_line()
-
 ```
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## Read and reduce data
 ```{r}
-#M <- read.csv("C:/Users/drk8b9/Documents/GitHubRepos/mentoring_data_analysis/Abby/Data/Test.corr.csv")
-M <- read.csv("C:/Users/drk8b9/Documents/GitHubRepos/mentoring_data_analysis/Abby/Data/Abby_data_reshape.csv", stringsAsFactors = T)
-
-M <- M[seq(from = 1, to = nrow(M), by = 10), -1]
-names(M) <- c("Condition", "Trace", "Time", "IN4", "IN6")
-```
-
-
-
-```{r}
-
-
-M$cor3 <- get_cor_over_time(input.df = M,
-                              col.x = "IN4",
-                              col.y = "IN6",
-                              nbins = 3,
-                              keep.every = 100,
-                              method = "pearson")
-
-M$cor30 <- get_cor_over_time(input.df = M,
-                              col.x = "IN4",
-                              col.y = "IN6",
-                              nbins = 30,
-                              keep.every = 100,
-                              method = "pearson")
-```
-
-```{r}
-N <- gather(M, cors, bins, 4:5)
-
-
-
-esquisse::esquisser(data = N[seq(from  = 0, to = nrow(N), by = 100),])
+#TODO Abby, use this to expore the data a little bit and think about what visualizations would help summarize what's occuring in the data.
+esquisse::esquisser(data = M)
 ```
 
