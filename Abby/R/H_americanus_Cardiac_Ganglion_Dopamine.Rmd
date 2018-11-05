@@ -122,7 +122,7 @@ if (update.data.frame == TRUE){
     # return list (of files in exp)
   # return list of lists (of returned lists)
   
-  output.list0 <- make_list_from_excels(target.dir = "S:/Data_Undergraduate/Data_Abby/Fall2018/data/",
+  output.list0 <- make_list_from_excels(target.dir = "//bio-files.col.missouri.edu/schulzlab/Data_Undergraduate/Data_Abby/Fall2018/Excel Sheets/",
                                     reduce.by = 500)
   
   #output.list0 <- make_list_from_excels(target.dir = "C:/Users/drk8b9/Documents/GitHubRepos/mentoring_data_analysis/Abby/Data/data_dirs/",
@@ -136,6 +136,8 @@ if (update.data.frame == TRUE){
 } else {
   M <- read_rds("../data/combined_data.rds") 
 }
+
+
 ```
 
 ```{r correct time}
