@@ -112,6 +112,7 @@ get_cor_over_time <- function(input.df = M[1:100, ],
 }
 ```
 
+# EDA -- Synchrony
 ## Data Preparation
 ```{r read in and condense data}
 if (update.data.frame == TRUE){
@@ -137,10 +138,9 @@ if (update.data.frame == TRUE){
   M <- read_rds("../data/combined_data.rds") 
 }
 
-
 ```
 
-```{r correct time}
+```{r correct time and lables}
 M$exp <- rep(NA, times = nrow(M))
 M$rec <- rep(NA, times = nrow(M))
 
@@ -166,6 +166,16 @@ for (i in seq_along(exps)){
     }
   }
 }
+
+#correct labels
+exp_names <- unique(M$exp)
+new_exp_names <- seq(from = 1, to = length(exp_names), by = 1)
+
+for(i in seq_along(exp_names)){
+  M[M$exp == exp_names[i], "exp"] <- new_exp_names[i]
+}
+
+M$exp <- as.factor(M$exp)
 ```
 
 ```{r drop near baseline mv data}
@@ -195,7 +205,6 @@ if (drop.low.signal.noise == TRUE){
 ```
 
 
-
 ```{r produce correlation coefficients}
 M$cor <- NA
 exps <- unique(M$exp)
@@ -213,7 +222,7 @@ for (i in seq_along(exps)){
 }
 ```
 
-
+## Data Visualization
 ```{r preliminary plots}
 p1 <- ggplot(M)+
   geom_point(aes(x = time_ms, y = in4, color = condition))+
@@ -236,8 +245,55 @@ ggplot(M)+
 ```
 
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 #TODO Abby, use this to expore the data a little bit and think about what visualizations would help summarize what's occuring in the data.
 esquisse::esquisser(data = M)
 ```
+
+# EDA -- Burst Statistics
+
+## Data Preparation
+```{r}
+burst.stats <- read.csv("//bio-files.col.missouri.edu/schulzlab/Data_Undergraduate/Data_Abby/Fall2018/Extracell_Data/Master_Excell_Sheet/Fall2018_Extracell.csv")
+burst.stats <- janitor::clean_names(burst.stats)
+burst.stats <- as.tibble(burst.stats)
+# convert time to more intuitive unit
+burst.stats$time_min <- (burst.stats$start_t_s/60)
+# drop redundent cols
+burst.stats <- burst.stats[, 6:16]
+burst.stats <- burst.stats[, !(names(burst.stats) %in% c("file_number"))]
+burst.stats <- rename(burst.stats, exp = experiment)
+burst.stats$exp <- as.factor(burst.stats$exp)
+# set data types 
+
+
+
+```
+
+
+## Data Visualization
+```{r}
+# Violin plots
+
+
+# line plots
+
+ggplot(burst.stats)+  
+  geom_point(aes(x = start_t_s, y = cycle_period_s, color = condition))+
+  facet_grid(~experiment)
+
+ggplot(M, aes(x = time_ms, y = cor, color = condition, group = exp))+
+  geom_point()+
+  geom_line()+
+  facet_grid(~exp)
+
+```
+
+
+##
+```{r}
+
+```
+
+
 
