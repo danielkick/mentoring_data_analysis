@@ -14,7 +14,9 @@ library(mgcv) # Used to drop low signal/noise data with GAM
 library(janitor) # renaming df names
 library(tidyverse) # Plotting, Data wrangling
 library(cowplot) # plot grid
-
+library(ggbeeswarm)
+library(lemon)
+library(officer)
 update.data.frame <- FALSE
 use.cor.bins <- 1000
 drop.low.signal.noise <- TRUE
@@ -222,8 +224,16 @@ for (i in seq_along(exps)){
 }
 ```
 
+```{r make time col more user friendly}
+
+M$time_min <- M$time_ms/60000
+
+```
+
+
+
 ## Data Visualization
-```{r preliminary plots}
+```{r preliminary plots, include=FALSE}
 p1 <- ggplot(M)+
   geom_point(aes(x = time_ms, y = in4, color = condition))+
   geom_point(aes(x = time_ms, y = in6, color = condition))+
@@ -242,6 +252,69 @@ ggplot(M)+
   geom_smooth(aes(x = time_ms, y = in4), color = "black")+
   geom_smooth(aes(x = time_ms, y = in6), color = "black")+
   facet_grid(~exp)
+```
+
+
+```{r}
+#TODO remove next line and rerun (or decrease data reduction and rerun)
+M <- M[seq(1, nrow(M), by = 100), ]
+
+plt_0 <- ggplot(M)+
+  geom_smooth(aes(x = time_min, y = in4), color = "black")+
+  geom_smooth(aes(x = time_min, y = in6), color = "Blue")+
+  geom_point(aes(x = time_min, y = in4, color = condition))+
+  geom_point(aes(x = time_min, y = in6, color = condition))+
+  geom_point(aes(x = time_min, y = in4), color = "black", shape = 1)+
+  facet_grid(~exp)+
+  labs(title = "Voltage Across Time", y = "Voltage in mV")+
+    theme(legend.position = "")+
+    coord_capped_cart(bottom = "both") +
+    theme(panel.border = element_blank(), axis.line = element_line()) + # needed for lemon
+    theme(text = element_text(face = "bold", size = 14))
+
+temp <- M[, c("exp", 
+              "time_min",
+              "condition", 
+              "in4", 
+              "in6")]
+temp <- temp %>% gather(channel, voltage, 4:5)
+
+plt_1 <- ggplot(temp, aes(x = condition, fill = condition, y = voltage))+
+  geom_violin()+
+  ggbeeswarm::geom_beeswarm(color = "black", shape = 1, alpha = 0.6)+
+  facet_grid(channel~exp)+
+  labs(title = "Voltage Across Treatment", y = "Voltage in mV")+
+    theme(legend.position = "")+
+    coord_capped_cart(bottom = "both") +
+    theme(panel.border = element_blank(), axis.line = element_line()) + # needed for lemon
+    theme(text = element_text(face = "bold", size = 14))
+
+
+plt_2 <-  ggplot(M, aes_string(x = "condition", y = "cor", fill = "condition", group = "condition"))+
+   geom_boxplot()+
+    #geom_violin()+
+    ggbeeswarm::geom_beeswarm(color = "black", shape = 1, alpha = 0.6)+
+    facet_grid(.~exp)+
+    labs(title = "Correlation Across Treatments")+
+    theme(legend.position = "")+
+    coord_capped_cart(bottom = "both") +
+    theme(panel.border = element_blank(), axis.line = element_line()) + # needed for lemon
+    theme(text = element_text(face = "bold", size = 14))
+ 
+ 
+plt_3 <-  ggplot(M, aes_string(x = "time_min", y = "cor", color = "condition", group = "exp"))+
+  geom_point(shape = 1)+
+  #geom_line()+
+  geom_smooth(color = "black")+
+  facet_grid(~exp)+
+  labs(title = "Correlation Across Time")+
+  theme(legend.position = "")+
+  coord_capped_cart(bottom = "both") +
+  theme(panel.border = element_blank(), axis.line = element_line()) + # needed for lemon
+  theme(text = element_text(face = "bold", size = 14))
+ 
+ 
+plts_cor <- list(plt_0, plt_1, plt_2, plt_3)
 ```
 
 
@@ -266,34 +339,75 @@ burst.stats <- rename(burst.stats, exp = experiment)
 burst.stats$exp <- as.factor(burst.stats$exp)
 # set data types 
 
-
-
 ```
 
 
 ## Data Visualization
+### cycle through all columns to make graphs
 ```{r}
-# Violin plots
+#TODO remove next line and rerun (or decrease data reduction and rerun)
+burst.stats <- burst.stats[seq(1, nrow(burst.stats), by = 10), ]
+
+plts_v <- map(1:7, function(i){
+  use.cols <- names(burst.stats)
+  
+  # Violin plots
+  ggplot(burst.stats, aes_string(x = "condition", y = use.cols[i], fill = "condition", group = "condition"))+
+    geom_violin()+
+    ggbeeswarm::geom_beeswarm(color = "black", shape = 1, alpha = 0.6)+
+    facet_grid(.~exp)+
+    labs(title = use.cols[i])+
+    theme(legend.position = "")+
+    coord_capped_cart(bottom = "both") +
+    theme(panel.border = element_blank(), axis.line = element_line()) + # needed for lemon
+    theme(text = element_text(face = "bold", size = 14))  
+  
+})
 
 
-# line plots
+plts_l <- map(1:7, function(i){
+  use.cols <- names(burst.stats)
 
-ggplot(burst.stats)+  
-  geom_point(aes(x = start_t_s, y = cycle_period_s, color = condition))+
-  facet_grid(~experiment)
+  # line plots
+ggplot(burst.stats, aes_string(x = "time_min", y = use.cols[i], color = "condition", group = "exp"))+
+  geom_point(shape = 1)+
+  #geom_line()+
+  geom_smooth(color = "black")+
+  facet_grid(~exp)+
+  labs(title = use.cols[i])+
+  theme(legend.position = "")+
+  coord_capped_cart(bottom = "both") +
+  theme(panel.border = element_blank(), axis.line = element_line()) + # needed for lemon
+  theme(text = element_text(face = "bold", size = 14))
 
-ggplot(M, aes(x = time_ms, y = cor, color = condition, group = exp))+
-  geom_point()+
-  geom_line()+
-  facet_grid(~exp)
+})
+
+#plts_list <- list()
+plts_list <- plts_cor
+
+for (i in seq_along(plts_v)){
+  
+  plts_list[[length(plts_list)+1]] <- plts_v[[i]]
+  plts_list[[length(plts_list)+1]] <- plts_l[[i]]
+  
+}
 
 ```
 
+## Make into nifty powerpoint
 
-##
 ```{r}
+my_pres <- read_pptx("../Out/SlideTemplate.pptx") 
 
+walk(plts_list, function(i){
+my_pres <<- my_pres %>% 
+  add_slide(layout = "Title and Content", master = "Office Theme") %>% 
+  ph_with_gg(value = i )  
+})
+
+print(my_pres, target = "../Out/AbbyLabMeeting2018.pptx") 
 ```
+
 
 
 
