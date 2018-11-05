@@ -186,7 +186,7 @@ if (drop.low.signal.noise == TRUE){
     M[M$exp == exps[i], "in6_threshold"] <- predict(fm.2, exp.time)
   }
   
-  M[(M$in4 =< M$in4_threshold) | (M$in6 =< M$in6_threshold), c("in4", "in6")] <- NA
+  M[(M$in4 <= M$in4_threshold) | (M$in6 <= M$in6_threshold), c("in4", "in6")] <- NA
   
   M <- M[, !(names(M) %in% c("in4_threshold", "in6_threshold"))]
   M <- M[!(is.na(M$in4)),]
