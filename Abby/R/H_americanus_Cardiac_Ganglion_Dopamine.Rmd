@@ -137,7 +137,8 @@ if (update.data.frame == TRUE){
   write_rds(M, "../data/combined_data.rds")
   write.csv(M, "../data/combined_data.csv")
 } else {
-  M <- read_rds("../data/combined_data.rds") 
+  #M <- read_rds("../data/combined_data.rds") 
+  M <- read_rds("C:/Users/abc6f/Documents/GitHub/mentoring_data_analysis/Abby/Data/combined_data.rds") 
 }
 
 ```
@@ -237,11 +238,13 @@ M$time_min <- M$time_ms/60000
 p1 <- ggplot(M)+
   geom_point(aes(x = time_ms, y = in4, color = condition))+
   geom_point(aes(x = time_ms, y = in6, color = condition))+
+  labs(title="Voltage across Time & Experiment",x="Time (ms)",y="Voltage")+
   facet_grid(~exp)
 
 p2 <- ggplot(M, aes(x = time_ms, y = cor, color = condition, group = exp))+
   geom_point()+
   geom_line()+
+  labs(title="Voltage Correlations across Time & Experiment",x="Time (ms)",y="Voltage Correlations")+
   facet_grid(~exp)
   
 cowplot::plot_grid(plotlist = list(p1, p2), nrow = 2, ncol =1)
@@ -251,7 +254,22 @@ ggplot(M)+
   geom_point(aes(x = time_ms, y = in6, color = condition))+
   geom_smooth(aes(x = time_ms, y = in4), color = "black")+
   geom_smooth(aes(x = time_ms, y = in6), color = "black")+
+  labs(title="Voltage across Time and Experiment",x="Time (ms)",y="Voltage")+
   facet_grid(~exp)
+
+library(ggplot2)
+
+ggplot(data = M) +
+  aes(x = time_ms, y = cor, color = condition) +
+  geom_line() +
+  labs(title = "Voltage Correlations",
+    x = "Time (ms)",
+    y = "Voltage Correlations",
+    subtitle = "Across Experiment & Time") +
+  theme_minimal() +
+  facet_wrap(vars(exp))
+
+
 ```
 
 
