@@ -134,7 +134,7 @@ if (update.data.frame == TRUE){
   output.list2 <- make_df_from_ldf(input.list = output.list1)
   M <- output.list2
   
-  write_rds(M, "../data/combined_data.rds")
+  write_rds(M, "C:/Users/abc6f/Documents/GitHub/mentoring_data_analysis/Abby/Data/combined_data.rds")
   write.csv(M, "../data/combined_data.csv")
 } else {
   #M <- read_rds("../data/combined_data.rds") 
