@@ -17,6 +17,7 @@ library(cowplot) # plot grid
 library(ggbeeswarm)
 library(lemon)
 library(officer)
+library(car)
 update.data.frame <- FALSE
 use.cor.bins <- 1000
 drop.low.signal.noise <- TRUE
@@ -134,11 +135,11 @@ if (update.data.frame == TRUE){
   output.list2 <- make_df_from_ldf(input.list = output.list1)
   M <- output.list2
   
-  write_rds(M, "C:/Users/abc6f/Documents/GitHub/mentoring_data_analysis/Abby/Data/combined_data.rds")
+  write_rds(M, "../data/combined_data.rds")
   write.csv(M, "../data/combined_data.csv")
 } else {
   #M <- read_rds("../data/combined_data.rds") 
-  M <- read_rds("C:/Users/abc6f/Documents/GitHub/mentoring_data_analysis/Abby/Data/combined_data.rds") 
+  M <- read_rds("../data/combined_data.rds") 
 }
 
 ```
@@ -257,8 +258,6 @@ ggplot(M)+
   labs(title="Voltage across Time and Experiment",x="Time (ms)",y="Voltage")+
   facet_grid(~exp)
 
-library(ggplot2)
-
 ggplot(data = M) +
   aes(x = time_ms, y = cor, color = condition) +
   geom_line() +
@@ -341,6 +340,46 @@ plts_cor <- list(plt_0, plt_1, plt_2, plt_3)
 esquisse::esquisser(data = M)
 ```
 
+## Statistics
+
+```{r}
+output <- matrix(0, nrow = 6*3, ncol = 3) %>% as.data.frame()
+names(output) <- c("exp", "condition", "cor")
+output$exp <- rep(1:6, each = 3)
+output$condition <- rep(c("Baseline", "DA", "Wash"), times = 6)
+
+use.times <- data.frame(
+  exp = rep(1:6, each = 3),
+  condition = rep(c("Baseline", "DA", "Wash"), times = 6), 
+  time = c(5.5, 33, 65,
+           8.5, 30, 64,
+           6.75, 33, 62,
+           5.25, 34, 60.25,
+           7.5, 35.5, 62,
+           8, 32, 63))
+
+
+for(EXPERIMENT in 1:6){
+  for (CONDITION in c("Baseline", "DA", "Wash")){
+    this.time <- use.times[use.times$exp == EXPERIMENT & use.times$condition == CONDITION, "time"]
+    output[output$exp == EXPERIMENT & output$condition == CONDITION, "cor"] <- M[M$exp == EXPERIMENT & M$condition == CONDITION & M$time_min >= this.time, "cor"][1:10,] %>% unlist(use.names = F) %>% median(., na.rm = T)    
+  }
+}
+
+
+fm <- lm(cor ~ condition, data = output)
+car::Anova(fm, type = "III") 
+
+agricolae::HSD.test(fm,"Condition",
+                    group=TRUE,
+                    console = TRUE,
+                    main="")$groups
+
+```
+
+
+
+
 # EDA -- Burst Statistics
 
 ## Data Preparation
@@ -411,6 +450,53 @@ for (i in seq_along(plts_v)){
 }
 
 ```
+
+## Run ANOVA / Tukeys
+```{r}
+use.start.times <- read.csv("../Data/Points_for_Stats.csv") %>% as.tibble()
+use.start.times$Experiment <- as.factor(use.start.times$Experiment)
+use.start.times <- rename(use.start.times, exp = experiment)
+
+output <- matrix(0, nrow = 6*3, ncol = 8) %>% as.data.frame()
+names(output) <- c("exp", "Condition", "Cycle.Period", "Duty.Cycle", "Interburst.Interval", "Burst.duration", "X..spikes.in.a.burst", "spike.frequency.in.a.burst")
+output$exp <- rep(1:6, times = 3)
+output$Condition <- rep(c("Baseline", "DA", "Wash"), times = 6)
+
+
+EXPERIMENT = 1
+CONDITION = "Baseline"
+
+i = 3 #:8
+
+for(EXPERIMENT in 1:6){
+  for (CONDITION in c("Baseline", "DA", "Wash")){
+    for (i in 3:8){
+      TIME <- use.start.times[use.start.times$Experiment == EXPERIMENT & use.start.times$Condition == CONDITION, i]
+      
+      output[output$exp == EXPERIMENT & output$Condition == CONDITION, i] <- burst.stats[burst.stats$exp == EXPERIMENT & burst.stats$time_min >= as.numeric(TIME),  (i-2)][1:10,] %>% unlist(., use.names = F) %>% median(., na.rm = T)      
+    }
+  }
+}
+
+
+walk(3:8, function(i){
+  
+names(output)[(i)] %>% print()
+
+fm <- lm(output[, i] ~ Condition, data = output)
+car::Anova(fm, type = "III") %>% print()
+
+agricolae::HSD.test(fm,"Condition",
+                    group=TRUE,
+                    console = TRUE,
+                    main="")$groups
+
+})
+```
+
+
+
+
 
 ## Make into nifty powerpoint
 
